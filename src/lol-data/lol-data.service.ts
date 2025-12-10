@@ -72,7 +72,7 @@ export class LolDataService {
                 }
             }
 
-            if (false && bHasMatch) {
+            if (bHasMatch) {
                 break;
             }
         }
