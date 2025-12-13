@@ -55,6 +55,7 @@ export class LolDataService {
 
                 let matchData = await this.matchDataModel.findOne({ matchId: match }).exec();
                 if (matchData) {
+                    console.log('already existed in db: %s', match);
                     result.push(matchData);
                     continue;
                 }

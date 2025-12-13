@@ -3,6 +3,7 @@ import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
 import { MatchDto, MatchInfoDto } from './dto/lol-match.dto';
 import { LolDataSyncPort } from './ports/lol-data-sync.port';
+import { Sleep } from 'src/common/sleep.util';
 
 @Injectable()
 export class LolSyncService implements LolDataSyncPort {
@@ -15,35 +16,24 @@ export class LolSyncService implements LolDataSyncPort {
         this.starttime = Math.floor(startDate.getTime() / 1000);
     }
 
-    async getPuuid(nickname: string, tag: string): Promise<string | null> {
+    async getPuuid(nickname: string, tag: string): Promise<string> {
         const url = this.apiurl + `riot/account/v1/accounts/by-riot-id/${encodeURIComponent(nickname)}/${encodeURIComponent(tag)}?api_key=${process.env.LOL_API_KEY}`;
         
         console.log('try to find puuid for %s#%s', nickname, tag);
 
-        try {
+        const result = await this.CallRiotAPIWithRateLimit<string>(async () => {
             const result = await firstValueFrom(this.httpService.get(url));
-            return result.data?.puuid ?? null;
-        } catch (e: any) {
-            switch(e.code) {
-                case 404:
-                    console.log('no account');
-                    break;
-                case 401:
-                    console.log('invalid api key');
-                    break;
-                default:
-                    console.log('error');
-                    break;
-            }
-            return null;
-        }
+            return result.data?.puuid ?? '';
+        });
+
+        return result ?? '';
     }
 
     async getMatches(puuid: string, queue: number, page: number): Promise<string[]> {
         console.log('try to find %s matches of %s in page %d', queue === 450 ? 'aram' : 'normal', puuid, page);
 
         const url = this.apiurl + `lol/match/v5/matches/by-puuid/${encodeURIComponent(puuid)}/ids?starttime=${this.starttime}&queue=${queue}&start=${page * 100}&count=100&api_key=${process.env.LOL_API_KEY}`;
-        try {
+        const result = await this.CallRiotAPIWithRateLimit<string[]>(async () => {
             const response = await firstValueFrom(this.httpService.get<string[]>(url));
             let responseNum: number = 0;
             if (response.data) {
@@ -51,43 +41,43 @@ export class LolSyncService implements LolDataSyncPort {
             }
             console.log('find %d matches', responseNum);
             return response.data?? [];
-        } catch (e: any) {
-            switch(e.code) {
-                case 404:
-                    console.log('no account');
-                    break;
-                case 401:
-                    console.log('invalid api key');
-                    break;
-                default:
-                    console.log('error');
-                    break;
-            }
-            return [];
-        }
+        });
+
+        return result?? [];
     }
 
     async getMatchInfo(matchid: string): Promise<MatchInfoDto | null> {
         console.log('try to find match info for %s', matchid);
         const url = this.apiurl + `lol/match/v5/matches/${matchid}?api_key=${process.env.LOL_API_KEY}`;
 
-        try {
+        return await this.CallRiotAPIWithRateLimit<MatchInfoDto | null>(async () => {
             const result = await firstValueFrom(this.httpService.get<MatchDto>(url));
             console.log('find match data');
             return result.data?.info ?? null;
-        } catch (e: any) {
-            switch(e.code) {
-                case 404:
-                    console.log('no match');
-                    break;
-                case 401:
-                    console.log('invalid api key');
-                    break;
-                default:
-                    console.log('error!');
-                    break;
+        });
+    }
+
+    private async CallRiotAPIWithRateLimit<T>(
+        Call: () => Promise<T>,
+    ): Promise<T | null> {
+        const maxRetry = 10;
+
+        for (let i = 0; i < maxRetry; i++) {
+            try {
+                return await Call();
+            } catch (error: any) {
+                const status = error?.response?.status;
+                if (status === 429 && i < maxRetry - 1) {
+                    const delayMs = 60000 * (i + 1);
+                    console.log('wait for rate limit : %d', delayMs);
+                    await Sleep(delayMs);
+                    continue;
+                }
+
+                throw error;
             }
-            return null;
         }
+
+        return null;
     }
 }
