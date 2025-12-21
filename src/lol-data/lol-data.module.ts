@@ -7,6 +7,8 @@ import { LolSyncModule } from 'src/lol-data-sync/lol-data-sync.module';
 import { UsersModule } from 'src/users/users.module';
 import { LOL_DATA_SERVICE } from './ports/lol-data.port';
 import { MatchData, MatchDataSchema } from './schemas/matchdata.schema';
+import { BullModule } from '@nestjs/bullmq';
+import { LolDataProcessor } from './lol-data.processor';
 
 @Module({
     imports: [
@@ -14,6 +16,9 @@ import { MatchData, MatchDataSchema } from './schemas/matchdata.schema';
             { name: UserLolData.name, schema: UserLolDataSchema},
             { name: MatchData.name, schema: MatchDataSchema }
         ]),
+        BullModule.registerQueue({
+            name: 'lol-data',
+        }),
         LolSyncModule,
         UsersModule
     ],
@@ -22,7 +27,8 @@ import { MatchData, MatchDataSchema } from './schemas/matchdata.schema';
         {
             provide: LOL_DATA_SERVICE,
             useClass: LolDataService
-        }
+        },
+        LolDataProcessor
     ],
     exports: [LOL_DATA_SERVICE]
 })

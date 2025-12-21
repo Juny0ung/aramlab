@@ -16,11 +16,11 @@ export class UsersService implements UsersPort {
     ) {}
 
     async create(createUserDto: CreateUserDto): Promise<UserInfoDto | null> {
-        console.log('try to create user %s', createUserDto.name);
+        console.log('[User]\ttry to create user %s', createUserDto.name);
         const puuid = await this.lolSyncService.getPuuid(createUserDto.nickname, createUserDto.tag);
         if (puuid === null)
         {
-            console.log('cannot find account for %s#%s', createUserDto.nickname, createUserDto.tag);
+            console.log('[User]\tcannot find account for %s#%s', createUserDto.nickname, createUserDto.tag);
             return null;
         }
 
@@ -29,7 +29,7 @@ export class UsersService implements UsersPort {
                 name: createUserDto.name,
                 puuid: puuid
             });
-            console.log('user create success: %s (%s)', createUserDto.name, puuid);
+            console.log('[User]\tuser create success: %s (%s)', createUserDto.name, puuid);
             await createdUser.save();
             return {
                 id: createdUser._id.toString(),
@@ -40,10 +40,10 @@ export class UsersService implements UsersPort {
         catch (e: any) {
             if (e?.code === 11000) {
                 if (e?.keyPattern?.name) {
-                    console.log('already existed name');
+                    console.log('[User]\talready existed name');
                 }
                 else if (e?.keyPattern?.puuid) {
-                    console.log('already existed account');
+                    console.log('[User]\talready existed account');
                 }
             }
             else {

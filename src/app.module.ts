@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { MongooseModule } from '@nestjs/mongoose';
+import { BullModule } from '@nestjs/bullmq';
 import { ConfigModule } from '@nestjs/config';
 import * as Joi from 'joi';
 
@@ -19,6 +20,12 @@ import { LolDataModule } from './lol-data/lol-data.module';
       })
     }),
     MongooseModule.forRoot(process.env.MONGODB_URI as string),
+    BullModule.forRoot({
+      connection: {
+        host: process.env.REDIS_HOST ?? 'localhost',
+        port: Number(process.env.REDIS_PORT ?? 6379)
+      }
+    }),
     UsersModule,
     LolSyncModule,
     LolDataModule

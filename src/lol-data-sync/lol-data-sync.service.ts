@@ -1,7 +1,7 @@
 import { Injectable, } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
-import { MatchDto, MatchInfoDto } from './dto/lol-match.dto';
+import { MatchDto } from './dto/lol-match.dto';
 import { LolDataSyncPort } from './ports/lol-data-sync.port';
 import { Sleep } from 'src/common/sleep.util';
 
@@ -19,7 +19,7 @@ export class LolSyncService implements LolDataSyncPort {
     async getPuuid(nickname: string, tag: string): Promise<string> {
         const url = this.apiurl + `riot/account/v1/accounts/by-riot-id/${encodeURIComponent(nickname)}/${encodeURIComponent(tag)}?api_key=${process.env.LOL_API_KEY}`;
         
-        console.log('try to find puuid for %s#%s', nickname, tag);
+        console.log('[LolSync]\ttry to find puuid for %s#%s', nickname, tag);
 
         const result = await this.CallRiotAPIWithRateLimit<string>(async () => {
             const result = await firstValueFrom(this.httpService.get(url));
@@ -39,21 +39,21 @@ export class LolSyncService implements LolDataSyncPort {
             if (response.data) {
                 responseNum = response.data.length;
             }
-            console.log('find %d matches', responseNum);
+            console.log('[LolSync]\tfind %d matches', responseNum);
             return response.data?? [];
         });
 
         return result?? [];
     }
 
-    async getMatchInfo(matchid: string): Promise<MatchInfoDto | null> {
-        console.log('try to find match info for %s', matchid);
+    async getMatchInfo(matchid: string): Promise<MatchDto | null> {
+        console.log('[LolSync]\ttry to find match info for %s', matchid);
         const url = this.apiurl + `lol/match/v5/matches/${matchid}?api_key=${process.env.LOL_API_KEY}`;
 
-        return await this.CallRiotAPIWithRateLimit<MatchInfoDto | null>(async () => {
+        return await this.CallRiotAPIWithRateLimit<MatchDto | null>(async () => {
             const result = await firstValueFrom(this.httpService.get<MatchDto>(url));
-            console.log('find match data');
-            return result.data?.info ?? null;
+            console.log('\t\tfind match data');
+            return result.data ?? null;
         });
     }
 
@@ -67,11 +67,17 @@ export class LolSyncService implements LolDataSyncPort {
                 return await Call();
             } catch (error: any) {
                 const status = error?.response?.status;
-                if (status === 429 && i < maxRetry - 1) {
-                    const delayMs = 60000 * (i + 1);
-                    console.log('wait for rate limit : %d', delayMs);
+                if (status === 429) {
+                    const delayMs = 120000 * (i + 1);
+                    console.log('[LolSync]\twait for rate limit : %d', delayMs);
                     await Sleep(delayMs);
                     continue;
+                } else if (status === 401) {
+                    console.log('[LolSync]\tinvalid api key');
+                    break;
+                } else if (status === 404) {
+                    console.log('[LolSync]\tdata not found');
+                    break;
                 }
 
                 throw error;

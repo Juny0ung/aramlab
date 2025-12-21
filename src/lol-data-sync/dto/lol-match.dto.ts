@@ -137,15 +137,21 @@ export class TeamDto {
     win: boolean;    
 }
 
-export class MatchInfoDto {
+class MatchInfoDto {
     gameCreation: number;
     gameDuration: number;
     gameMode: string;
     mapId: number;
+    queueId: number;
     participants: ParticipantDto[];
     teams: TeamDto[];
 }
 
+class MetadataDto {
+    matchId: string;
+}
+
 export class MatchDto {
+    metadata: MetadataDto;
     info: MatchInfoDto;
 }
