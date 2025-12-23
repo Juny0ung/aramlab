@@ -285,6 +285,9 @@ export class MatchData {
     matchId: string;
 
     @Prop()
+    dataVersion: string;
+
+    @Prop()
     gameCreation: Date;
     
     @Prop()

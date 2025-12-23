@@ -148,6 +148,7 @@ class MatchInfoDto {
 }
 
 class MetadataDto {
+    dataVersion: string;
     matchId: string;
 }
 

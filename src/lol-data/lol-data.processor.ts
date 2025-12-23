@@ -159,7 +159,7 @@ export class LolDataProcessor extends WorkerHost {
 
     private async createMatchData(matchDto : MatchDto): Promise<MatchDataDocument> {
         const { gameCreation, gameDuration, gameMode, mapId, queueId, participants, teams } = matchDto.info;
-        const matchId = matchDto.metadata.matchId;
+        const { dataVersion, matchId } = matchDto.metadata;
         
         console.log('[LolData]\tcreate new match data: %s', matchId);
         const participantDocs = participants.map((participant: ParticipantDto) => ({
@@ -268,6 +268,7 @@ export class LolDataProcessor extends WorkerHost {
 
         const matchData = new this.matchDataModel({
             matchId: matchId,
+            dataVersion: dataVersion,
             gameCreation: new Date(gameCreation),
             gameDuration: gameDuration,
             gameMode: gameMode,
