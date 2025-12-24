@@ -9,6 +9,8 @@ import { LOL_DATA_SERVICE } from './ports/lol-data.port';
 import { MatchData, MatchDataSchema } from './schemas/matchdata.schema';
 import { BullModule } from '@nestjs/bullmq';
 import { LolDataProcessor } from './lol-data.processor';
+import { LolDataEnqueuer } from './lol-data.enqueuer';
+import { LolDataScheduler } from './lol-data.scheduler';
 
 @Module({
     imports: [
@@ -28,7 +30,10 @@ import { LolDataProcessor } from './lol-data.processor';
             provide: LOL_DATA_SERVICE,
             useClass: LolDataService
         },
-        LolDataProcessor
+        LolDataService,
+        LolDataProcessor,
+        LolDataEnqueuer,
+        LolDataScheduler
     ],
     exports: [LOL_DATA_SERVICE]
 })
