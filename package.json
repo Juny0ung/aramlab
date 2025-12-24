@@ -23,6 +23,9 @@
     "test:e2e": "jest --config ./test/jest-e2e.json"
   },
   "dependencies": {
+    "@bull-board/api": "^6.15.0",
+    "@bull-board/express": "^6.15.0",
+    "@bull-board/nestjs": "^6.15.0",
     "@nestjs/axios": "^4.0.1",
     "@nestjs/bullmq": "^11.0.4",
     "@nestjs/common": "^11.0.1",
@@ -32,6 +35,7 @@
     "@nestjs/platform-express": "^11.0.1",
     "axios": "^1.13.2",
     "bullmq": "^5.66.0",
+    "express-basic-auth": "^1.2.1",
     "joi": "^18.0.2",
     "mongoose": "^8.20.1",
     "reflect-metadata": "^0.2.2",

@@ -11,6 +11,8 @@ import { BullModule } from '@nestjs/bullmq';
 import { LolDataProcessor } from './lol-data.processor';
 import { LolDataEnqueuer } from './lol-data.enqueuer';
 import { LolDataScheduler } from './lol-data.scheduler';
+import { BullBoardModule } from '@bull-board/nestjs';
+import { BullMQAdapter } from '@bull-board/api/bullMQAdapter';
 
 @Module({
     imports: [
@@ -20,6 +22,10 @@ import { LolDataScheduler } from './lol-data.scheduler';
         ]),
         BullModule.registerQueue({
             name: 'lol-data',
+        }),
+        BullBoardModule.forFeature({
+            name: 'lol-data',
+            adapter: BullMQAdapter,
         }),
         LolSyncModule,
         UsersModule

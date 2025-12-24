@@ -5,6 +5,9 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { BullModule } from '@nestjs/bullmq';
 import { ConfigModule } from '@nestjs/config';
 import * as Joi from 'joi';
+import { BullBoardModule } from '@bull-board/nestjs';
+import { ExpressAdapter } from '@bull-board/express';
+import basicAuth from 'express-basic-auth';
 
 import { UsersModule } from './users/users.module';
 import { LolSyncModule } from './lol-data-sync/lol-data-sync.module';
@@ -25,6 +28,14 @@ import { LolDataModule } from './lol-data/lol-data.module';
         host: process.env.REDIS_HOST ?? 'localhost',
         port: Number(process.env.REDIS_PORT ?? 6379)
       }
+    }),
+    BullBoardModule.forRoot({
+      route: '/admin/queues',
+      adapter: ExpressAdapter,
+      middleware: basicAuth({
+        challenge: true,
+        users: { admin: '1234' }
+      })
     }),
     UsersModule,
     LolSyncModule,
