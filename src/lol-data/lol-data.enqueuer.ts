@@ -4,25 +4,32 @@ import { Queue } from "bullmq";
 
 @Injectable()
 export class LolDataEnqueuer {
+    private readonly lolDataUpdateScheduleId = 'periodic-loldata';
+    private readonly matchUpdateScheduleId = 'periodic-match';
+
     constructor(
         @InjectQueue('lol-data') private readonly lolDataQueue: Queue,
     ) {}
 
-    async SetPeriodicLolDataUpdate(queue: number, repeatpattern: string) {
-        await this.lolDataQueue.add(
-            'user-data',
+    async setPeriodicLolDataUpdate(queue: number, repeatpattern: string) {
+        await this.lolDataQueue.upsertJobScheduler(
+            this.lolDataUpdateScheduleId,
+            { pattern: repeatpattern },
             {
-                name: '',
-                queue: queue
-            },
-            { 
-                jobId: 'periodicupdate',
-                repeat: { pattern: repeatpattern}
+                name: 'user-data',
+                data: {
+                    name: '',
+                    queue: queue
+                },
+                opts: {
+                    removeOnComplete: true,
+                    removeOnFail: 3
+                }
             }
-        );
+        )
     }
 
-    async SetInstantLolDataUpdate(name: string, queue: number){
+    async setInstantLolDataUpdate(name: string, queue: number){
         if (name.length === 0) {
             console.log('[LolData]\tadd update lol data queue for users');
         } else {
@@ -42,17 +49,21 @@ export class LolDataEnqueuer {
     }
 
     async setPeriodicMatchUpdate(queue: number, repeatpattern: string) {
-        await this.lolDataQueue.add(
-            'match-user',
+        await this.lolDataQueue.upsertJobScheduler(
+            this.matchUpdateScheduleId,
+            { pattern: repeatpattern },
             {
-                name: '',
-                queue: queue
-            },
-            { 
-                jobId: 'periodicupdate',
-                repeat: { pattern: repeatpattern}
+                name: 'match-user',
+                data: {
+                    name: '',
+                    queue: queue
+                },
+                opts: {
+                    removeOnComplete: true,
+                    removeOnFail: 3
+                }
             }
-        );
+        )
     }
 
     async setInstantMatchUpdate(name: string, queue: number) {
@@ -77,5 +88,10 @@ export class LolDataEnqueuer {
     async clearQueue() {
         console.log('clear queue');
         await this.lolDataQueue.drain(true);
+    }
+
+    async RemovePeriodicQueue() {
+        await this.lolDataQueue.removeJobScheduler(this.lolDataUpdateScheduleId);
+        await this.lolDataQueue.removeJobScheduler(this.matchUpdateScheduleId);
     }
 }

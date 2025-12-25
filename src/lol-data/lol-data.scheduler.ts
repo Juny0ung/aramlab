@@ -1,8 +1,8 @@
-import { Inject, Injectable, OnModuleInit } from '@nestjs/common';
+import { Inject, Injectable, OnApplicationShutdown, OnModuleInit } from '@nestjs/common';
 import { LolDataEnqueuer } from './lol-data.enqueuer';
 
 @Injectable()
-export class LolDataScheduler implements OnModuleInit {
+export class LolDataScheduler implements OnModuleInit, OnApplicationShutdown {
     private readonly queue: number = 450;
     private readonly repeatpattern =  '0 0 * * * *';
 
@@ -14,8 +14,12 @@ export class LolDataScheduler implements OnModuleInit {
         await this.initScheduler(this.queue);
     }
 
+    async onApplicationShutdown(signal?: string): Promise<void> {
+        await this.lolDataEnqueuer.RemovePeriodicQueue();
+    }
+
     private async initScheduler(queue: number): Promise<void> {
         await this.lolDataEnqueuer.setPeriodicMatchUpdate(queue, this.repeatpattern);
-        await this.lolDataEnqueuer.SetPeriodicLolDataUpdate(queue, this.repeatpattern);
+        await this.lolDataEnqueuer.setPeriodicLolDataUpdate(queue, this.repeatpattern);
     }
 }

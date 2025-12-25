@@ -13,12 +13,12 @@ export class LolDataController {
 
     @Post('updateloldata/:queue')
     async updateAllUserData(@Param('queue') queue: number) {
-        this.lolDataEnqueuer.SetInstantLolDataUpdate('', queue);
+        this.lolDataEnqueuer.setInstantLolDataUpdate('', queue);
     }
 
     @Post('updateloldata/:queue/:name')
     async updateUserData(@Param('name') name: string, @Param('queue') queue: number) {
-        this.lolDataEnqueuer.SetInstantLolDataUpdate(name, queue);
+        this.lolDataEnqueuer.setInstantLolDataUpdate(name, queue);
     }
 
     @Post('updatematches/:queue')
