@@ -1,5 +1,5 @@
 import { Processor, WorkerHost, InjectQueue } from "@nestjs/bullmq";
-import { Inject } from "@nestjs/common";
+import { Inject, Logger } from "@nestjs/common";
 import { Job, Queue } from "bullmq";
 import { LolDataService } from "./lol-data.service";
 
@@ -14,6 +14,8 @@ interface MatchPayLoad {
 
 @Processor('lol-data')
 export class LolDataProcessor extends WorkerHost {
+    private readonly logger = new Logger(LolDataProcessor.name);
+
     constructor(
         @Inject() private lolDataService: LolDataService,
         @InjectQueue('lol-data') private readonly lolDataQueue: Queue,
@@ -33,7 +35,7 @@ export class LolDataProcessor extends WorkerHost {
                 await this.HandleMatch(job);
                 break;
             default:
-                console.log('[LolData]\tunknown job: %s', job.name);
+                this.logger.error('\tunknown job: %s', job.name);
         }
     }
 
@@ -43,21 +45,23 @@ export class LolDataProcessor extends WorkerHost {
     }
 
     async HandleMatchUser(job: Job<UserPayload>) {
-        console.log('[processor]\tupdate matches');
         const { name, queue } = job.data;
+        this.logger.log('[1] update matches for %s', name.length > 0 ? name : 'users');
+
         const newMatches = await this.lolDataService.getNewMatches(name, queue);
 
         for (const newMatch of newMatches) {
-            console.log('\t\t%s added to queue', newMatch);
+            this.logger.log('\t%s added to queue', newMatch);
                 this.lolDataQueue.add('match', {
                     matchId: newMatch
                 });
         }
-        console.log('\t\t%d match added to queue', newMatches.length);
+        this.logger.log('[2] %d match added to queue', newMatches.length);
     }
 
     async HandleMatch(job: Job<MatchPayLoad>) {
         const { matchId } = job.data;
+        this.logger.log('[1] add %s to db', matchId);
         await this.lolDataService.addMatchData(matchId);
     }
 }

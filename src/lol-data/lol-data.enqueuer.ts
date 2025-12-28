@@ -1,9 +1,11 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, Logger } from "@nestjs/common";
 import { InjectQueue } from "@nestjs/bullmq";
 import { Queue } from "bullmq";
 
 @Injectable()
 export class LolDataEnqueuer {
+    private readonly logger = new Logger(LolDataEnqueuer.name);
+
     private readonly lolDataUpdateScheduleId = 'periodic-loldata';
     private readonly matchUpdateScheduleId = 'periodic-match';
 
@@ -12,6 +14,7 @@ export class LolDataEnqueuer {
     ) {}
 
     async setPeriodicLolDataUpdate(queue: number, repeatpattern: string) {
+        this.logger.log('[1] set periodic lol data update');
         await this.lolDataQueue.upsertJobScheduler(
             this.lolDataUpdateScheduleId,
             { pattern: repeatpattern },
@@ -31,9 +34,9 @@ export class LolDataEnqueuer {
 
     async setInstantLolDataUpdate(name: string, queue: number){
         if (name.length === 0) {
-            console.log('[LolData]\tadd update lol data queue for users');
+            this.logger.log('[1] add update lol data queue for users');
         } else {
-            console.log('[LolData]\tadd update lol data queue for user: %s', name);
+            this.logger.log('[1] add update lol data queue for user: %s', name);
         }
 
         await this.lolDataQueue.add(
@@ -49,6 +52,7 @@ export class LolDataEnqueuer {
     }
 
     async setPeriodicMatchUpdate(queue: number, repeatpattern: string) {
+        this.logger.log('[1] set periodic match update');
         await this.lolDataQueue.upsertJobScheduler(
             this.matchUpdateScheduleId,
             { pattern: repeatpattern },
@@ -68,9 +72,9 @@ export class LolDataEnqueuer {
 
     async setInstantMatchUpdate(name: string, queue: number) {
         if (name.length === 0) {
-            console.log('[LolData]\tadd update matches queue for users');
+            this.logger.log('[1] add update matches queue for users');
         } else {
-            console.log('[LolData]\tadd update matches queue for user: %s', name);
+            this.logger.log('[1] add update matches queue for user: %s', name);
         }
 
         await this.lolDataQueue.add(
@@ -86,11 +90,12 @@ export class LolDataEnqueuer {
     }
 
     async clearQueue() {
-        console.log('clear queue');
+        this.logger.log('[1] clear queue');
         await this.lolDataQueue.drain(true);
     }
 
     async RemovePeriodicQueue() {
+        this.logger.log('[1] remove periodic queue');
         await this.lolDataQueue.removeJobScheduler(this.lolDataUpdateScheduleId);
         await this.lolDataQueue.removeJobScheduler(this.matchUpdateScheduleId);
     }

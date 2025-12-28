@@ -1,5 +1,5 @@
 import { Model } from 'mongoose';
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { User, UserDocument } from './schemas/users.schema';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -10,17 +10,19 @@ import { UserInfoDto } from './dto/user-info.dto';
 
 @Injectable()
 export class UsersService implements UsersPort {
+    private readonly logger = new Logger(UsersService.name);
+
     constructor(
         @InjectModel(User.name) private userModel: Model<User>,
         @Inject(LOL_DATA_SYNC_SERVICE) private readonly lolSyncService: LolDataSyncPort
     ) {}
 
     async create(createUserDto: CreateUserDto): Promise<UserInfoDto | null> {
-        console.log('[User]\ttry to create user %s', createUserDto.name);
+        this.logger.log('[1] start create user %s', createUserDto.name);
         const puuid = await this.lolSyncService.getPuuid(createUserDto.nickname, createUserDto.tag);
         if (puuid === null)
         {
-            console.log('[User]\tcannot find account for %s#%s', createUserDto.nickname, createUserDto.tag);
+            this.logger.warn('[2] create user fail\n\tcannot find account for %s#%s', createUserDto.nickname, createUserDto.tag);
             return null;
         }
 
@@ -29,8 +31,8 @@ export class UsersService implements UsersPort {
                 name: createUserDto.name,
                 puuid: puuid
             });
-            console.log('[User]\tuser create success: %s (%s)', createUserDto.name, puuid);
             await createdUser.save();
+            this.logger.log('[2] user create success: %s (puuid: %s)', createUserDto.name, puuid);
             return {
                 id: createdUser._id.toString(),
                 name: createdUser.name,
@@ -40,14 +42,14 @@ export class UsersService implements UsersPort {
         catch (e: any) {
             if (e?.code === 11000) {
                 if (e?.keyPattern?.name) {
-                    console.log('[User]\talready existed name');
+                    this.logger.warn('[2] already existed name: %s', createUserDto.name);
                 }
                 else if (e?.keyPattern?.puuid) {
-                    console.log('[User]\talready existed account');
+                    this.logger.warn('[2] already existed account: %s#%s', createUserDto.nickname, createUserDto.tag);
                 }
             }
             else {
-                console.log('error');
+                this.logger.warn('[2] unknown error(%d)', e?.code);
             }
             return null;
         }
@@ -59,6 +61,7 @@ export class UsersService implements UsersPort {
         }).exec();
 
         if (!user) {
+            this.logger.warn('\tno user %s', name);
             return null;
         }
 
@@ -78,6 +81,7 @@ export class UsersService implements UsersPort {
         }).exec();
 
         if (!user) {
+            this.logger.warn('\tno user for puuid %s', puuid);
             return null;
         }
 

@@ -1,4 +1,4 @@
-import { Inject, Injectable } from "@nestjs/common";
+import { Inject, Injectable, Logger } from "@nestjs/common";
 import { Model } from 'mongoose';
 import { InjectModel } from '@nestjs/mongoose';
 import { UserLolData, UserLolDataDocument } from "./schemas/userloldata.schema";
@@ -12,6 +12,8 @@ import { UserInfoDto } from "src/users/dto/user-info.dto";
 
 @Injectable()
 export class LolDataService {
+    private readonly logger = new Logger(LolDataService.name);
+
     constructor(
         @Inject(USERS_SERVICE) private readonly userService: UsersPort,
         @Inject(LOL_DATA_SYNC_SERVICE) private readonly lolSyncService: LolDataSyncPort,
@@ -20,23 +22,23 @@ export class LolDataService {
     ) {}
 
     async getUserData(name: string, queue: number): Promise<UserLolDataDocument | null> {
+        this.logger.log('[1] find user data %s (%s)', name, queue === 450 ? 'aram' : 'normal');
         const user = await this.userService.findOne(name);
         if (!user) {
-            console.log('[LolData]\tno user: %s', name);
+            this.logger.warn('[2] no user: %s', name);
             return null;
         }
 
-        let lolData = await this.userLolDataModel
+        return await this.userLolDataModel
             .findOne({userId: user.id})
             .exec();
-
-        return lolData;
     }
 
     async getMatches(name: string, queue: number, count: number, page: number): Promise<MatchDataDocument[]> {
+        this.logger.log('[1] get matches for %s (%d)', name, queue);
         const user = await this.userService.findOne(name);
         if (!user) {
-            console.log('[LolData]\tno user: %s', name);
+            this.logger.warn('[2] no user: %s', name);
             return [];
         }
 
@@ -49,23 +51,31 @@ export class LolDataService {
     }
     
     async getNewMatches(name: string, queue: number): Promise<string[]> {
+        this.logger.log('[1] find new matches');
         let users: UserInfoDto[] = await this.getUserDtos(name);
         if (users.length === 0) {
+            this.logger.warn('[2] no users');
             return [];
+        } else {
+            this.logger.log('[2] find %d users', users.length);
         }
 
         let newMatchSet: Set<string> = new Set<string>();
         for (const user of users) {
+            this.logger.log('[3] find matches for %s', user.name);
             let userLolData = await this.userLolDataModel
                 .findOne({userId: user.id})
                 .exec();
+
             if (!userLolData) {
+                this.logger.log('\t%s:\tadd new lol data', user.name);
                 userLolData = new this.userLolDataModel({
                     userId: user.id
                 });
             }
 
             const lastMatch: string = userLolData.lastMatch ?? '';
+            let matchCount = 0;
             for (let page = 0; page < 100; page++) {
                 const matches = await this.lolSyncService.getMatches(user.puuid, queue, page);
                 if (matches.length === 0) {
@@ -74,7 +84,7 @@ export class LolDataService {
 
                 if (page === 0 && lastMatch !== matches[0]) {
                     userLolData.lastMatch = matches[0];
-                    console.log('\t\tlast match updated: %s', matches[0]);
+                    this.logger.log('\t%s\tlast match updated: %s', user.name, matches[0]);
                     await userLolData.save();
                 }
 
@@ -86,28 +96,34 @@ export class LolDataService {
                     }
 
                     newMatchSet.add(match);
+                    matchCount++;
                 }
 
                 if (bHasMatch) {
                     break;
                 }
             }
+
+            this.logger.log('\t%s\t%d new matches found', user.name, matchCount);
         }
+
+        this.logger.log('[4] %d new matches found', newMatchSet.size);
 
         return Array.from(newMatchSet);
     }
 
     async addMatchData(matchId: string): Promise<MatchDataDocument | null> {
+        this.logger.log('[1] handle new match %s', matchId);
         let matchData = await this.matchDataModel.findOne({ matchId: matchId }).exec();
         if (matchData) {
-            console.log('[LolData]\talready existed in db: %s', matchId);
+            this.logger.log('[2] already existed in db: %s', matchId);
             return matchData;
         }
 
         const matchDto = await this.lolSyncService.getMatchInfo(matchId);
         if (!matchDto)
         {
-            console.log('[LolData]\tno match data: %s', matchId);
+            this.logger.warn('[2] no match data: %s', matchId);
             return null;
         }
 
@@ -115,9 +131,13 @@ export class LolDataService {
     }
 
     async updateLolData(name: string, queue: number) {
+        this.logger.log('[1] update lol data');
         let users: UserInfoDto[] = await this.getUserDtos(name);
         if (users.length === 0) {
+            this.logger.warn('[2] no user to update');
             return;
+        } else {
+            this.logger.log('[2] %d users update', users.length);
         }
 
         for (const user of users) {
@@ -140,6 +160,8 @@ export class LolDataService {
                 // apply to user lol data
             }
 
+            this.logger.log('[3] %s lol data updated', user.name);
+
             await userLolData.save();
         }
     }
@@ -150,7 +172,7 @@ export class LolDataService {
         if (name.length > 0) {
             const user = await this.userService.findOne(name);
             if (!user) {
-                console.log('no user: %s', name);
+                this.logger.warn('\tno user: %s', name);
                 return [];
             }
             users.push(user);
@@ -165,7 +187,7 @@ export class LolDataService {
         const { gameCreation, gameDuration, gameMode, mapId, queueId, participants, teams } = matchDto.info;
         const { dataVersion, matchId } = matchDto.metadata;
         
-        console.log('[LolData]\tcreate new match data: %s', matchId);
+        this.logger.log('\tcreate new match data: %s', matchId);
         const participantDocs = participants.map((participant: ParticipantDto) => ({
             puuid: participant.puuid,
             teamId: participant.teamId,
