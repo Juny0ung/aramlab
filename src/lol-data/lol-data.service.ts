@@ -64,6 +64,7 @@ export class LolDataService {
         }
 
         let newMatchSet: Set<string> = new Set<string>();
+        const matchesToQueue: { name: string; data: { matchId: string } }[] = [];
         for (const user of users) {
             this.logger.log('[3] find matches for %s', user.name);
             let userLolData = await this.userLolDataModel
@@ -102,13 +103,12 @@ export class LolDataService {
 
                     try {
                         await this.matchDataModel.create({ matchId: match, dbStatus: dbStatus.Pending });
-                        await this.lolDataQueue.add('match', {
-                            matchId: match
-                        });
+                        matchesToQueue.push({ name: 'match', data: { matchId: match } });
                         newMatchSet.add(match);
                     } catch (e: any) {
                         if (e?.code === 11000) {
                             this.logger.warn('\t%s: existed match', match);
+                            newMatchSet.add(match);
                         } else {
                             throw e;
                         }
@@ -125,6 +125,10 @@ export class LolDataService {
                 this.logger.log('\t%s\tlast match updated: %s', user.name, newestMatch);
                 await userLolData.save();
             }
+        }
+
+        if (matchesToQueue.length > 0) {
+            await this.lolDataQueue.addBulk(matchesToQueue);
         }
 
         this.logger.log('[4] %d matches loaded', newMatchSet.size);

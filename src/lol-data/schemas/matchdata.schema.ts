@@ -314,3 +314,4 @@ export class MatchData {
 }
 
 export const MatchDataSchema = SchemaFactory.createForClass(MatchData);
+MatchDataSchema.index({ 'participants.puuid': 1, queue: 1, gameCreation: -1 });
