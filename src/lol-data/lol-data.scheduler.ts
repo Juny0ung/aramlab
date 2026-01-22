@@ -19,7 +19,6 @@ export class LolDataScheduler implements OnModuleInit, OnApplicationShutdown {
     }
 
     private async initScheduler(queue: number): Promise<void> {
-        await this.lolDataEnqueuer.setPeriodicMatchUpdate(queue, this.repeatpattern);
-        await this.lolDataEnqueuer.setPeriodicLolDataUpdate(queue, this.repeatpattern);
+        await this.lolDataEnqueuer.setPeriodicUpdate(queue, this.repeatpattern);
     }
 }

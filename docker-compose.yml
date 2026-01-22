@@ -6,6 +6,31 @@ services:
       - "6379:6379"
     volumes:
       - redis-data:/data
+    restart: unless-stopped
+  mongo:
+    image: mongo:7
+    container_name: local-mongo
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: rootpass
+    volumes:
+      - mongo-data:/data/db
+    restart: unless-stopped
+  mogo-express:
+    image: mongo-express:1
+    container_name: local-mongo-express
+    ports:
+      - "8081:8081"
+    environment:
+      ME_CONFIG_MONGODB_ADMINUSERNAME: root
+      ME_CONFIG_MONGODB_ADMINPASSWORD: rootpass
+      ME_CONFIG_MONGODB_SERVER: mongo
+    depends_on:
+      - mongo
+    restart: unless-stopped
 
 volumes:
   redis-data:
+  mongo-data:

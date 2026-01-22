@@ -8,18 +8,19 @@ export class LolDataEnqueuer {
 
     private readonly lolDataUpdateScheduleId = 'periodic-loldata';
     private readonly matchUpdateScheduleId = 'periodic-match';
+    private readonly periodicUpdateScheduleId = 'periodic-match';
 
     constructor(
         @InjectQueue('lol-data') private readonly lolDataQueue: Queue,
     ) {}
 
-    async setPeriodicLolDataUpdate(queue: number, repeatpattern: string) {
-        this.logger.log('[1] set periodic lol data update');
+    async setPeriodicUpdate(queue: number, repeatpattern: string) {
+        this.logger.log('[1] set periodic update');
         await this.lolDataQueue.upsertJobScheduler(
-            this.lolDataUpdateScheduleId,
+            this.periodicUpdateScheduleId,
             { pattern: repeatpattern },
             {
-                name: 'user-data',
+                name: 'periodic-update',
                 data: {
                     name: '',
                     queue: queue
@@ -30,6 +31,7 @@ export class LolDataEnqueuer {
                 }
             }
         )
+
     }
 
     async setInstantLolDataUpdate(name: string, queue: number){
@@ -49,25 +51,6 @@ export class LolDataEnqueuer {
                 jobId: `${queue}:${name}`
             }
         );
-    }
-
-    async setPeriodicMatchUpdate(queue: number, repeatpattern: string) {
-        this.logger.log('[1] set periodic match update');
-        await this.lolDataQueue.upsertJobScheduler(
-            this.matchUpdateScheduleId,
-            { pattern: repeatpattern },
-            {
-                name: 'match-user',
-                data: {
-                    name: '',
-                    queue: queue
-                },
-                opts: {
-                    removeOnComplete: true,
-                    removeOnFail: 3
-                }
-            }
-        )
     }
 
     async setInstantMatchUpdate(name: string, queue: number) {

@@ -1,6 +1,6 @@
-import { Processor, WorkerHost, InjectQueue } from "@nestjs/bullmq";
+import { Processor, WorkerHost } from "@nestjs/bullmq";
 import { Inject, Logger } from "@nestjs/common";
-import { Job, Queue } from "bullmq";
+import { Job } from "bullmq";
 import { LolDataService } from "./lol-data.service";
 
 interface UserPayload {
@@ -18,7 +18,6 @@ export class LolDataProcessor extends WorkerHost {
 
     constructor(
         @Inject() private lolDataService: LolDataService,
-        @InjectQueue('lol-data') private readonly lolDataQueue: Queue,
     ) {
         super();
     }
@@ -26,42 +25,43 @@ export class LolDataProcessor extends WorkerHost {
     async process(job: Job, token?: string): Promise<any> {
         switch (job.name) {
             case 'user-data':
-                await this.HandleUserData(job);
+                await this.handleUserData(job);
                 break;
             case 'match-user':
-                await this.HandleMatchUser(job);
+                await this.handleMatchUser(job);
                 break;
             case 'match':
-                await this.HandleMatch(job);
+                await this.handleMatch(job);
+                break;
+            case 'periodic-update':
+                await this.handleFailedMatch();
+                await this.handleMatchUser(job);
+                await this.handleUserData(job);
                 break;
             default:
                 this.logger.error('\tunknown job: %s', job.name);
         }
     }
 
-    async HandleUserData(job: Job<UserPayload>) {
+    async handleUserData(job: Job<UserPayload>) {
         const { name, queue } = job.data;
-        this.lolDataService.updateLolData(name, queue);
+        await this.lolDataService.updateLolData(name, queue);
     }
 
-    async HandleMatchUser(job: Job<UserPayload>) {
+    async handleMatchUser(job: Job<UserPayload>) {
         const { name, queue } = job.data;
         this.logger.log('[1] update matches for %s', name.length > 0 ? name : 'users');
-
-        const newMatches = await this.lolDataService.getNewMatches(name, queue);
-
-        for (const newMatch of newMatches) {
-            this.logger.log('\t%s added to queue', newMatch);
-                this.lolDataQueue.add('match', {
-                    matchId: newMatch
-                });
-        }
-        this.logger.log('[2] %d match added to queue', newMatches.length);
+        await this.lolDataService.loadNewMatches(name, queue);
     }
 
-    async HandleMatch(job: Job<MatchPayLoad>) {
+    async handleMatch(job: Job<MatchPayLoad>) {
         const { matchId } = job.data;
-        this.logger.log('[1] add %s to db', matchId);
-        await this.lolDataService.addMatchData(matchId);
+        this.logger.log('[1] load match data %s', matchId);
+        await this.lolDataService.loadMatchData(matchId);
+    }
+
+    async handleFailedMatch() {
+        this.logger.log('[1] update load failed matches');
+        await this.lolDataService.loadFailedMatches();
     }
 }

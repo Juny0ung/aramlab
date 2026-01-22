@@ -1,5 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument, Types } from 'mongoose';
+import { dbStatus } from './dbstatus.enum';
 
 export type MatchDataDocument = HydratedDocument<MatchData>;
 
@@ -281,32 +282,35 @@ const TeamSchema = SchemaFactory.createForClass(TeamData);
 
 @Schema()
 export class MatchData {
-    @Prop({ unique: true })
+    @Prop({ unique: true, required: true })
     matchId: string;
+    
+    @Prop({ enum: dbStatus, index: true, required: true})
+    dbStatus: dbStatus;
 
     @Prop()
-    dataVersion: string;
+    dataVersion?: string;
 
     @Prop()
-    gameCreation: Date;
+    gameCreation?: Date;
     
     @Prop()
-    gameDuration: number;
+    gameDuration?: number;
     
     @Prop()
-    gameMode: string;
+    gameMode?: string;
     
     @Prop()
-    mapId: number;
+    mapId?: number;
 
     @Prop()
-    queue: number;
+    queue?: number;
 
     @Prop({ type: [ParticipantSchema] })
-    participants: ParticipantData[];
+    participants?: ParticipantData[];
 
     @Prop({ type: [TeamSchema] })
-    teams: TeamData[];
+    teams?: TeamData[];
 }
 
 export const MatchDataSchema = SchemaFactory.createForClass(MatchData);

@@ -9,6 +9,9 @@ import { MatchData, MatchDataDocument, ObjectiveData } from "./schemas/matchdata
 import { LOL_DATA_SYNC_SERVICE } from "src/lol-data-sync/ports/lol-data-sync.port";
 import type { LolDataSyncPort } from "src/lol-data-sync/ports/lol-data-sync.port";
 import { UserInfoDto } from "src/users/dto/user-info.dto";
+import { dbStatus } from "./schemas/dbstatus.enum";
+import { InjectQueue } from "@nestjs/bullmq";
+import { Queue } from "bullmq";
 
 @Injectable()
 export class LolDataService {
@@ -18,7 +21,8 @@ export class LolDataService {
         @Inject(USERS_SERVICE) private readonly userService: UsersPort,
         @Inject(LOL_DATA_SYNC_SERVICE) private readonly lolSyncService: LolDataSyncPort,
         @InjectModel(UserLolData.name) private userLolDataModel: Model<UserLolData>,
-        @InjectModel(MatchData.name) private matchDataModel: Model<MatchData>
+        @InjectModel(MatchData.name) private matchDataModel: Model<MatchData>,
+        @InjectQueue('lol-data') private readonly lolDataQueue: Queue
     ) {}
 
     async getUserData(name: string, queue: number): Promise<UserLolDataDocument | null> {
@@ -49,13 +53,12 @@ export class LolDataService {
             .limit(count)
             .exec();
     }
-    
-    async getNewMatches(name: string, queue: number): Promise<string[]> {
-        this.logger.log('[1] find new matches');
+
+    async loadNewMatches(name: string, queue: number) {
         let users: UserInfoDto[] = await this.getUserDtos(name);
         if (users.length === 0) {
             this.logger.warn('[2] no users');
-            return [];
+            return;
         } else {
             this.logger.log('[2] find %d users', users.length);
         }
@@ -75,28 +78,41 @@ export class LolDataService {
             }
 
             const lastMatch: string = userLolData.lastMatch ?? '';
-            let matchCount = 0;
+            let newestMatch = '';
             for (let page = 0; page < 100; page++) {
                 const matches = await this.lolSyncService.getMatches(user.puuid, queue, page);
                 if (matches.length === 0) {
                     break;
                 }
 
-                if (page === 0 && lastMatch !== matches[0]) {
-                    userLolData.lastMatch = matches[0];
-                    this.logger.log('\t%s\tlast match updated: %s', user.name, matches[0]);
-                    await userLolData.save();
+                if (page === 0 && matches.length > 0) {
+                    newestMatch = matches[0];
                 }
 
                 let bHasMatch = false;
                 for (const match of matches) {
-                    if (userLolData.lastMatch && userLolData.lastMatch === match) {
+                    if (lastMatch && lastMatch === match) {
                         bHasMatch = true;
                         break;
                     }
 
-                    newMatchSet.add(match);
-                    matchCount++;
+                    if (newMatchSet.has(match)) {
+                        continue;
+                    }
+
+                    try {
+                        await this.matchDataModel.create({ matchId: match, dbStatus: dbStatus.Pending });
+                        await this.lolDataQueue.add('match', {
+                            matchId: match
+                        });
+                        newMatchSet.add(match);
+                    } catch (e: any) {
+                        if (e?.code === 11000) {
+                            this.logger.warn('\t%s: existed match', match);
+                        } else {
+                            throw e;
+                        }
+                    }
                 }
 
                 if (bHasMatch) {
@@ -104,30 +120,69 @@ export class LolDataService {
                 }
             }
 
-            this.logger.log('\t%s\t%d new matches found', user.name, matchCount);
+            if (newestMatch && newestMatch !== lastMatch) {
+                userLolData.lastMatch = newestMatch;
+                this.logger.log('\t%s\tlast match updated: %s', user.name, newestMatch);
+                await userLolData.save();
+            }
         }
 
-        this.logger.log('[4] %d new matches found', newMatchSet.size);
-
-        return Array.from(newMatchSet);
+        this.logger.log('[4] %d matches loaded', newMatchSet.size);
     }
 
-    async addMatchData(matchId: string): Promise<MatchDataDocument | null> {
-        this.logger.log('[1] handle new match %s', matchId);
-        let matchData = await this.matchDataModel.findOne({ matchId: matchId }).exec();
-        if (matchData) {
-            this.logger.log('[2] already existed in db: %s', matchId);
-            return matchData;
-        }
-
-        const matchDto = await this.lolSyncService.getMatchInfo(matchId);
-        if (!matchDto)
-        {
-            this.logger.warn('[2] no match data: %s', matchId);
+    async loadMatchData(matchId: string): Promise<MatchDataDocument | null> {
+        const matchData = await this.matchDataModel.findOne({ matchId: matchId}).exec();
+        if (!matchData) {
+            this.logger.warn('[2] match data not found in db: %s', matchId);
             return null;
         }
 
-        return await this.createMatchData(matchDto);
+        if (matchData.dbStatus !== dbStatus.Pending) {
+            this.logger.warn('[2] db status of match !== pending (%s)', matchData.dbStatus);
+            return matchData;
+        }
+
+        matchData.dbStatus = dbStatus.Processing;
+        await matchData.save();
+
+        let matchDbStatus = dbStatus.Failed;
+
+        try {
+            const matchDto = await this.lolSyncService.getMatchInfo(matchId);
+            if (matchDto) {
+                await this.updateMatchData(matchData, matchDto);
+                matchDbStatus = dbStatus.Done;
+                this.logger.log('[3] match data loaded: %s', matchId);
+            } else {
+                this.logger.warn('[3] no match data: %s', matchId);
+            }
+        } catch (e: any) {
+            this.logger.warn('[3] load match data failed: %s', matchId);
+        }
+
+        matchData.dbStatus = matchDbStatus;
+        await matchData.save();
+        return matchData;
+    }
+
+    async loadFailedMatches() {
+        this.logger.log('[2] find failed matches');
+        const failedMatches = await this.matchDataModel.find({ dbStatus: dbStatus.Failed }).exec();
+
+        if (failedMatches.length === 0) {
+            this.logger.log('[3] no failed matches');
+            return;
+        }
+
+        this.logger.log('[3] %d failed matches found', failedMatches.length);
+
+        for (const match of failedMatches) {
+            match.dbStatus = dbStatus.Pending;
+            await match.save();
+            await this.lolDataQueue.add('match', {
+                matchId: match.matchId
+            });
+        }
     }
 
     async updateLolData(name: string, queue: number) {
@@ -183,11 +238,10 @@ export class LolDataService {
         return users;
     }
 
-    private async createMatchData(matchDto : MatchDto): Promise<MatchDataDocument> {
+    private async updateMatchData(matchDataDocument: MatchDataDocument, matchDto: MatchDto) {
         const { gameCreation, gameDuration, gameMode, mapId, queueId, participants, teams } = matchDto.info;
-        const { dataVersion, matchId } = matchDto.metadata;
-        
-        this.logger.log('\tcreate new match data: %s', matchId);
+        const { dataVersion } = matchDto.metadata;
+
         const participantDocs = participants.map((participant: ParticipantDto) => ({
             puuid: participant.puuid,
             teamId: participant.teamId,
@@ -292,18 +346,13 @@ export class LolDataService {
             };
         });
 
-        const matchData = new this.matchDataModel({
-            matchId: matchId,
-            dataVersion: dataVersion,
-            gameCreation: new Date(gameCreation),
-            gameDuration: gameDuration,
-            gameMode: gameMode,
-            mapId: mapId,
-            queue: queueId,
-            participants: participantDocs,
-            teams: teamDocs
-        });
-
-        return matchData.save();
+        matchDataDocument.dataVersion = dataVersion;
+        matchDataDocument.gameCreation = new Date(gameCreation);
+        matchDataDocument.gameDuration = gameDuration;
+        matchDataDocument.gameMode = gameMode;
+        matchDataDocument.mapId = mapId;
+        matchDataDocument.queue = queueId;
+        matchDataDocument.participants = participantDocs;
+        matchDataDocument.teams = teamDocs;
     }
 }
