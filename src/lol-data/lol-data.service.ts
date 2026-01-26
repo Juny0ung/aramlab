@@ -64,7 +64,8 @@ export class LolDataService {
         }
 
         let newMatchSet: Set<string> = new Set<string>();
-        const matchesToQueue: { name: string; data: { matchId: string } }[] = [];
+        const bulkOps: any[] = [];
+        const matchIdsInOrder: string[] = [];
         for (const user of users) {
             this.logger.log('[3] find matches for %s', user.name);
             let userLolData = await this.userLolDataModel
@@ -101,18 +102,15 @@ export class LolDataService {
                         continue;
                     }
 
-                    try {
-                        await this.matchDataModel.create({ matchId: match, dbStatus: dbStatus.Pending });
-                        matchesToQueue.push({ name: 'match', data: { matchId: match } });
-                        newMatchSet.add(match);
-                    } catch (e: any) {
-                        if (e?.code === 11000) {
-                            this.logger.warn('\t%s: existed match', match);
-                            newMatchSet.add(match);
-                        } else {
-                            throw e;
+                    bulkOps.push({
+                        updateOne: {
+                            filter: { matchId: match },
+                            update: { $setOnInsert: { matchId: match, dbStatus: dbStatus.Pending } },
+                            upsert: true
                         }
-                    }
+                    });
+                    matchIdsInOrder.push(match);
+                    newMatchSet.add(match);
                 }
 
                 if (bHasMatch) {
@@ -124,6 +122,20 @@ export class LolDataService {
                 userLolData.lastMatch = newestMatch;
                 this.logger.log('\t%s\tlast match updated: %s', user.name, newestMatch);
                 await userLolData.save();
+            }
+        }
+
+        const matchesToQueue: { name: string; data: { matchId: string } }[] = [];
+        if (bulkOps.length > 0) {
+            const result = await this.matchDataModel.bulkWrite(bulkOps);
+            const upsertedIndexes = new Set(Object.keys(result.upsertedIds).map(Number));
+
+            for (let i = 0; i < matchIdsInOrder.length; i++) {
+                if (upsertedIndexes.has(i)) {
+                    matchesToQueue.push({ name: 'match', data: { matchId: matchIdsInOrder[i] } });
+                } else {
+                    this.logger.warn('\t%s: existed match', matchIdsInOrder[i]);
+                }
             }
         }
 
