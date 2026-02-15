@@ -201,16 +201,17 @@ export class LolDataService {
         }
     }
 
-    async updateLolData(name: string, queue: number) {
+    async updateLolData(name: string, queue: number): Promise<string[]> {
         this.logger.log('[1] update lol data');
         let users: UserInfoDto[] = await this.getUserDtos(name);
         if (users.length === 0) {
             this.logger.warn('[2] no user to update');
-            return;
+            return [];
         } else {
             this.logger.log('[2] %d users update', users.length);
         }
 
+        let updatedUsers: string[] = [];
         for (const user of users) {
             let userLolData = await this.userLolDataModel
                 .findOne({userId: user.id})
@@ -234,7 +235,10 @@ export class LolDataService {
             this.logger.log('[3] %s lol data updated', user.name);
 
             await userLolData.save();
+            updatedUsers.push(user.name);
         }
+
+        return updatedUsers;
     }
 
     private async getUserDtos(name: string): Promise<UserInfoDto[]> {

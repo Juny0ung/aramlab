@@ -8,6 +8,8 @@ import * as Joi from 'joi';
 import { BullBoardModule } from '@bull-board/nestjs';
 import { ExpressAdapter } from '@bull-board/express';
 import basicAuth from 'express-basic-auth';
+import { CacheModule } from '@nestjs/cache-manager';
+import * as redisStore from 'cache-manager-redis-store';
 
 import { UsersModule } from './users/users.module';
 import { LolSyncModule } from './lol-data-sync/lol-data-sync.module';
@@ -23,6 +25,14 @@ import { LolDataModule } from './lol-data/lol-data.module';
       })
     }),
     MongooseModule.forRoot(process.env.MONGODB_URI as string),
+    CacheModule.register({
+      isGlobal: true,
+      store: redisStore,
+      host: process.env.REDIS_HOST ?? 'localhost',
+      port: Number(process.env.REDIS_PORT ?? 6379),
+      db: 1,
+      ttl: 600,
+    }),
     BullModule.forRoot({
       connection: {
         host: process.env.REDIS_HOST ?? 'localhost',
